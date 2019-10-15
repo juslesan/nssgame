@@ -20,9 +20,10 @@ class Network:
         :param data: str
         :return: str
         """
+        #print(data)
         try:
             self.client.send(str.encode(data))
-            reply = self.client.recv(2048).decode()
+            reply = self.client.recv(4096).decode()
             return reply
         except socket.error as e:
             return str(e)

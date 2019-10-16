@@ -9,21 +9,18 @@ class Network:
                                     # ipv4 address. This feild will be the same for all your clients.
         self.port = 5555
         self.addr = (self.host, self.port)
-        self.id = self.connect()
-
+        self.id, self.options = self.connect()
     def connect(self):
         self.client.connect(self.addr)
-        return self.client.recv(2048).decode()
+        res = self.client.recv(2048).decode()
+        res = res.split(";")
+        #print(res[1])
+        return res[0], res[1].split(",")
 
     def send(self, data):
-        """
-        :param data: str
-        :return: str
-        """
-        #print(data)
         try:
             self.client.send(str.encode(data))
-            reply = self.client.recv(4096).decode()
+            reply = self.client.recv(8192).decode()
             return reply
         except socket.error as e:
             return str(e)

@@ -27,6 +27,7 @@ hps = {}
 upgrades = {}
 shots = []
 supply = []
+options = ""
 
 def remove_lost(thread_id):
     global pos, hps
@@ -40,8 +41,9 @@ def remove_lost(thread_id):
             #print("here")
 
 def threaded_client(conn):
-    global currentId, pos, hps, upgrades
-    conn.send(str.encode(str(currentId)))
+    global currentId, pos, hps, upgrades, options
+    #print(options)
+    conn.send(str.encode(str(currentId) + ";" + str(options).strip("[").strip("]").strip("'")))
     thread_id = currentId
     currentId += 1
     reply = ''
@@ -131,6 +133,13 @@ def threaded_client(conn):
     conn.close()
     remove_lost(thread_id)
 
+def check_if_player_over_rect(rect_pos, rect_size, circle_pos):
+    rect = pygame.Rect(rect_pos , rect_size)
+    centerPt = pygame.math.Vector2(circle_pos)
+    cornerPts = [rect.bottomleft, rect.bottomright, rect.topleft, rect.topright]
+    if [p for p in cornerPts if pygame.math.Vector2(*p).distance_to(centerPt) <= 15]:
+        return True
+    return False
 
 def scan_supply():
     global pos, hps, supply
@@ -140,14 +149,11 @@ def scan_supply():
         for po in range(len(pos)):
             split = pos[po].split(":")
             possplit = split[1].split(",")
-
             supplysplit = supply[i].split(":")
             supplypos = supplysplit[1].split(",")
+
             # Check if player lands on supply drop
-            rect = pygame.Rect((int(supplypos[0]), int(supplypos[1])) , (10,10))
-            centerPt = pygame.math.Vector2((float(possplit[0]), float(possplit[1])))
-            cornerPts = [rect.bottomleft, rect.bottomright, rect.topleft, rect.topright]
-            if [p for p in cornerPts if pygame.math.Vector2(*p).distance_to(centerPt) <= 15]:
+            if (check_if_player_over_rect((int(supplypos[0]), int(supplypos[1])) , (10,10), (float(possplit[0]), float(possplit[1])))):
                     # Make the player that was hit lose health
                     supply_to_remove.append(supply[i])
                     if supplysplit[0] == "hp":
@@ -167,11 +173,8 @@ def scan_hits():
             split = pos[po].split(":")
             possplit = split[1].split(",")
             if (shots[i][5] != split[0]):
-                #Check if the shot hits a player
-                rect = pygame.Rect((float(shots[i][0]), float(shots[i][1])),(int(shots[i][2]),int(shots[i][2])))
-                centerPt = pygame.math.Vector2((float(possplit[0]), float(possplit[1])))
-                cornerPts = [rect.bottomleft, rect.bottomright, rect.topleft, rect.topright]
-                if [p for p in cornerPts if pygame.math.Vector2(*p).distance_to(centerPt) <= 15]:
+                #Check if the shot hits a players
+                if check_if_player_over_rect((float(shots[i][0]), float(shots[i][1])),(int(shots[i][2]),int(shots[i][2])), (float(possplit[0]), float(possplit[1]))):
                     # Make the player that was hit lose health
                     shots_to_remove.append(shots[i])
                     hps[int(split[0])] -= 1
@@ -181,12 +184,30 @@ def scan_hits():
     # print(shots_to_remove)
     for shot in shots_to_remove:
         shots.remove(shot)
-    
+
+def parse_options():
+    global options
+    x = 0
+    y = 0
+    walls = []
+    split_options = options.split(",")
+    for i in range(len(split_options)):
+        if i == 0:
+            x = int(split_options[i])
+        elif i == 1:
+            y = int(split_options[i])
+        else:
+            walls.append(split_options[i])
+    #print(walls)
+    return [x, y, walls]
+
 def gametime():
     global shots, supply, pos
     clock = pygame.time.Clock()
+    opts = parse_options()
+    #print(opts)
     while (True):
-        clock.tick(60)
+        clock.tick(30)
         # Add supply drops with 0.05% chance per server tick, max 2 supply drop on map at all times
         if random.randint(1, 10000) > 9950 and pos != [] and len(supply) < 1:
             supply.append("hp:" + str(random.randint(10, 590)) + "," + str(random.randint(10, 590)))
@@ -198,20 +219,45 @@ def gametime():
             shots[i][1] = str(float(shots[i][4]) + float(shots[i][1]))
 
             # Remove shot if out of bounds
-            if float(shots[i][0]) < 600 and float(shots[i][0]) > 0 and float(shots[i][1]) < 600 and float(shots[i][1]) > 0:
-                filtered_shots.append(shots[i]) 
-                #print(filtered_shots)
+            if float(shots[i][0]) < int(opts[0]) and float(shots[i][0]) > 0 and float(shots[i][1]) < int(opts[1]) and float(shots[i][1]) > 0:
+                for wall in opts[2]:
+                    #print(here)
+                    spl = wall.split(":")
+                    rect = pygame.Rect((int(spl[0]), int(spl[1])),(int(spl[2]),int(spl[3])))
+                    hit = False
+                    if rect.collidepoint(float(shots[i][0]), float(shots[i][1])):
+                        hit = True
+                        break
+                if hit == False:
+                    filtered_shots.append(shots[i]) 
         shots = filtered_shots
 
         scan_hits()
         scan_supply()
 
+mappath = str(sys.argv[1])
+try:
+    f = open("map", "r")
+    line = f.readline()
+    cnt = 0
+    while line:
+        opt = str(line).rsplit()[0] + ","
+        #print(opt)
+        options += opt
+        line = f.readline()
+        cnt += 1
+finally:
+    options = options[:-1]
+    f.close()
+print(options)
+
 while True:
     # Start thread that keeps up the game servers tick rate.
     start_new_thread(gametime,())
-    # Accept new connections from clients
+       # Accept new connections from clients
     conn, addr = s.accept()
     print("Connected to: ", addr)
     # Start a new client thread for new connection
     start_new_thread(threaded_client, (conn,))
 
+    

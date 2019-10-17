@@ -207,7 +207,7 @@ def gametime():
     opts = parse_options()
     #print(opts)
     while (True):
-        clock.tick(30)
+        clock.tick(60)
         # Add supply drops with 0.05% chance per server tick, max 2 supply drop on map at all times
         if random.randint(1, 10000) > 9950 and pos != [] and len(supply) < 1:
             supply.append("hp:" + str(random.randint(10, 590)) + "," + str(random.randint(10, 590)))
@@ -249,12 +249,12 @@ try:
 finally:
     options = options[:-1]
     f.close()
-print(options)
+#print(options)
 
+# Start thread that keeps up the game servers tick rate.
+start_new_thread(gametime,())
 while True:
-    # Start thread that keeps up the game servers tick rate.
-    start_new_thread(gametime,())
-       # Accept new connections from clients
+    # Accept new connections from clients
     conn, addr = s.accept()
     print("Connected to: ", addr)
     # Start a new client thread for new connection
